@@ -48,7 +48,7 @@ class DiffusionModel extends Common
 
     public function run()
     {
-        //round off mapping
+        //round off mapping function
         $mat_rnd = function($x){return round($x , 3);};
 
         // get actual results using formula

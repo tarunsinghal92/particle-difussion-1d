@@ -9,7 +9,7 @@ define('SITEURL', 'particle-difussion-1d/');
  * time step (seconds)
  * sample value : 1 day = 1 * 8.64 * 10^6 seconds
  */
-define('TIME_STEP', (5 * 8.64 * 1000000));
+define('TIME_STEP', (0.5 * 8.64 * 1000000));
 
 /**
  * initial Concenteration (in percent)
@@ -25,12 +25,12 @@ define('OVERALL_TIME', 100 * 8.64 * 1000000);
 /**
  * deltax of material (m)
  */
-define('STEP_SIZE', 0.001);
+define('STEP_SIZE', 0.002);
 
 /**
  * Number of 1D elements
  */
-define('NUM_ELEMENTS', 100);
+define('NUM_ELEMENTS', 50);
 
 /**
  * diffusion constant (m2/s)
