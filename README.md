@@ -1,6 +1,6 @@
 # Particle Diffusion in 1 Dimension
 
-This is simple program which can be used to find concentration at different depth and time.
+A small program to analyse temporal diffusion of particles in 1-dimensional solids though FEA and comparing with actual results.
 
 ## Dependency
 
