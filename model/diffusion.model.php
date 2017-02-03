@@ -29,27 +29,33 @@ class DiffusionModel extends Common
 
     private $calculated_results;
     private $actual_results;
-    private $error_results;
+    public $error_results;
+    private $STEP_SIZE;
+    private $TIME_STEP;
     private $a_val = []; // a1, a2, a3
     private $b_val = []; // b1, b2, b3
 
-    public function __construct()
+    public function __construct($STEP_SIZE = STEP_SIZE, $TIME_STEP = TIME_STEP)
     {
+        //set values
+        $this->TIME_STEP = $TIME_STEP;
+        $this->STEP_SIZE = $STEP_SIZE;
+
         // a values
-        $this->a_val[1] = (-1 * THETA * DIFFUSION_CONSTANT) / (STEP_SIZE * STEP_SIZE);
-        $this->a_val[2] = (1 / TIME_STEP) + (2 * THETA * DIFFUSION_CONSTANT / (STEP_SIZE * STEP_SIZE));
-        $this->a_val[3] = (-1 * THETA * DIFFUSION_CONSTANT) / (STEP_SIZE * STEP_SIZE);
+        $this->a_val[1] = (-1.0 * THETA * DIFFUSION_CONSTANT) / ($STEP_SIZE * $STEP_SIZE);
+        $this->a_val[2] = (1.0 / $TIME_STEP) + (2.0 * THETA * DIFFUSION_CONSTANT / ($STEP_SIZE * $STEP_SIZE));
+        $this->a_val[3] = (-1.0 * THETA * DIFFUSION_CONSTANT) / ($STEP_SIZE * $STEP_SIZE);
 
         // b values
-        $this->b_val[1] = (1 - THETA) * DIFFUSION_CONSTANT / (STEP_SIZE * STEP_SIZE);
-        $this->b_val[2] = (1 / TIME_STEP) - (2 * (1 - THETA) * DIFFUSION_CONSTANT / (STEP_SIZE * STEP_SIZE));
-        $this->b_val[3] = (1 - THETA) * DIFFUSION_CONSTANT / (STEP_SIZE * STEP_SIZE);
+        $this->b_val[1] = (1.0 - THETA) * DIFFUSION_CONSTANT / ($STEP_SIZE * $STEP_SIZE);
+        $this->b_val[2] = (1.0 / $TIME_STEP) - (2.0 * (1.0 - THETA) * DIFFUSION_CONSTANT / ($STEP_SIZE * $STEP_SIZE));
+        $this->b_val[3] = (1.0 - THETA) * DIFFUSION_CONSTANT / ($STEP_SIZE * $STEP_SIZE);
     }
 
     public function run()
     {
         //round off mapping function
-        $mat_rnd = function($x){return round($x , 3);};
+        $mat_rnd = function($x){return round($x , 5);};
 
         // get actual results using formula
         $this->actual_results = $this->get_actual_results();
@@ -58,46 +64,56 @@ class DiffusionModel extends Common
         $this->calculated_results = $this->get_calculated_results();
 
         // calculate RMS error
-        // $this->error_results = $this->calculate_error();
+        $this->error_results = $this->calculate_error();
 
         // debug
-        $this->show($this->actual_results->map($mat_rnd));
-        $this->show('<hr>');
-        $this->show($this->calculated_results->map($mat_rnd));die;
-        $this->show('<hr>');
-        $this->dump($this->error_results);
-        die;
+        // $this->dump($this->actual_results->map($mat_rnd)->getColumn($this->actual_results->getM() - 1));
+        // $this->show('<hr>');
+        // $this->dump($this->calculated_results->map($mat_rnd)->getColumn($this->actual_results->getM() - 1));
+        // $this->show('<hr>');
+        // $this->dump('Error:' . $this->error_results . '%');
+        // die;
     }
 
     private function calculate_error()
     {
-        //get difference matrix
-        $diff_matrix = $this->actual_results->subtract($this->calculated_results);
+        //define var
+        $sum = 0;
+        $mat_rnd = function($x){return round($x , 5);};
+        $i = intval($this->actual_results->getM() - 1);
+        $j = intval($this->actual_results->getN() - 1);
 
-        //get dot product
-        $diff_matrix = $diff_matrix->hadamardProduct($diff_matrix);
+        //get data
+        $old = new Vector($this->actual_results->map($mat_rnd)->getColumn($j));
+        $new = new Vector($this->calculated_results->map($mat_rnd)->getColumn($j));
+        $diff = $old->subtract($new);
+        // $this->dump($old->getVector());
+        // $this->dump($new->getVector());
+        // $this->dump($diff->getVector());
 
-        //get error
-        for ($i=0; $i < $diff_matrix->getN(); $i++) {
-            $stepwise_error[] = round(100 * sqrt(array_sum($diff_matrix->getColumn($i)) / $diff_matrix->getM()), 1);
+        //calculate absolue error
+        for ($i=0; $i < $diff->getN(); $i++) {
+            if($old->get($i) != 0){
+                $sum += abs($diff->get($i)) / $old->get($i);
+            }
         }
 
-        //return
-        return new Vector($stepwise_error);
+        //return avg percent
+        return round(100 * ($sum / $diff->getN()) ,2);
     }
 
     private function get_calculated_results()
     {
         // total time steps deltat
         $t_steps = [];
-        for ($i = 1 * TIME_STEP; $i <= OVERALL_TIME; $i = $i + TIME_STEP) {
+        for ($i = 1 * $this->TIME_STEP; $i <= OVERALL_TIME; $i = $i + $this->TIME_STEP) {
             $t_steps[] = $i;
         }
 
         // total length part deltax
         $l_steps = [];
-        for ($i = 1; $i <= NUM_ELEMENTS; $i++) {
-            $l_steps[] = $i * STEP_SIZE;
+        for ($i = 1; $i <= (TOTAL_LENGTH / $this->STEP_SIZE); $i++) {
+            $l_steps[] = $i * $this->STEP_SIZE;
         }
 
         // constant for a system
@@ -122,7 +138,10 @@ class DiffusionModel extends Common
         $lhs_matrix = MatrixFactory::create($lhs_matrix);
 
         //initial concenteration matrix for all time steps
-        $conc_matrix = $this->initialize_matrix((count($l_steps)), count($t_steps) + 1);
+        $conc_matrix = $this->initialize_matrix((count($l_steps) + 1), count($t_steps) + 1);
+        foreach ($conc_matrix as $key => $value) {
+            $conc_matrix[$key][0] = 1;
+        }
 
         //loop for each time step
         foreach ($t_steps as $row => $time) {
@@ -131,10 +150,12 @@ class DiffusionModel extends Common
             $rhs_vector = $this->form_rhs_vector($l_steps, $conc_matrix, $row);
 
             //store the results
-            $conc_matrix[$row + 1] = $lhs_matrix->solve($rhs_vector)->getVector();
+            $conc_matrix[$row + 1] = array_merge([1], $lhs_matrix->solve($rhs_vector)->getVector());
         }
+        // $this->show(MatrixFactory::create($conc_matrix)->map(function($x){return round($x , 3);}));
+
         // return after removing initial column
-        return (MatrixFactory::create($conc_matrix)->rowExclude(0)->transpose());
+        return (MatrixFactory::create($conc_matrix)->transpose());
     }
 
     private function form_rhs_vector($l_steps, $conc_matrix, $time_step)
@@ -147,16 +168,16 @@ class DiffusionModel extends Common
         $rhs_vector = array_fill(0, count($l_steps), 0.0);
         foreach ($rhs_vector as $row => $step) {
             if($row == 0){
-              $rhs_vector[$row] = ($this->b_val[1] - $this->a_val[1]) * INITIAL_CONC;
+              $rhs_vector[$row] = ($this->b_val[1] - $this->a_val[1]) * $conc_matrix[$time_step][0];
               $rhs_vector[$row] += $this->b_val[2] * $conc_matrix[$time_step][1];
               $rhs_vector[$row] += $this->b_val[3] * $conc_matrix[$time_step][2];
             }else if($row == count($l_steps)-1){
-              $rhs_vector[$row] = ($this->b_val[1] * $conc_matrix[$time_step][count($l_steps)-2]);
-              $rhs_vector[$row] += ($this->b_val[2] + $this->b_val[3]) * $conc_matrix[$time_step][count($l_steps)-1];
+              $rhs_vector[$row] = ($this->b_val[1] * $conc_matrix[$time_step][count($l_steps)-1]);
+              $rhs_vector[$row] += ($this->b_val[2] + $this->b_val[3]) * $conc_matrix[$time_step][count($l_steps)];
             }else{
-              $rhs_vector[$row] = $this->b_val[1] * $conc_matrix[$time_step][$row - 1];
-              $rhs_vector[$row] += $this->b_val[2] * $conc_matrix[$time_step][$row + 0];
-              $rhs_vector[$row] += $this->b_val[3] * $conc_matrix[$time_step][$row + 1];
+              $rhs_vector[$row] = $this->b_val[1] * $conc_matrix[$time_step][$row + 0];
+              $rhs_vector[$row] += $this->b_val[2] * $conc_matrix[$time_step][$row + 1];
+              $rhs_vector[$row] += $this->b_val[3] * $conc_matrix[$time_step][$row + 2];
             }
         }
         //return
@@ -167,25 +188,26 @@ class DiffusionModel extends Common
     {
         // total time steps deltat
         $t_steps = [];
-        for ($i = 1 * TIME_STEP; $i <= OVERALL_TIME; $i = $i + TIME_STEP) {
+        for ($i = 0 * $this->TIME_STEP; $i <= OVERALL_TIME; $i = $i + $this->TIME_STEP) {
             $t_steps[] = $i;
         }
 
         // total length part deltax
         $l_steps = [];
-        for ($i=1; $i <= NUM_ELEMENTS; $i++) {
-            $l_steps[] = $i * STEP_SIZE;
+        for ($i=0; $i <= (TOTAL_LENGTH / $this->STEP_SIZE); $i++) {
+            $l_steps[] = $i * $this->STEP_SIZE;
         }
 
         // get answers
         $res = $this->initialize_matrix(count($t_steps), count($l_steps));
         foreach ($t_steps as $k => $time) {
             foreach ($l_steps as $kk => $length) {
-                $res[$kk][$k] = (1 - Special::errorFunction($length / (2 * sqrt($time * DIFFUSION_CONSTANT))));
+                if($time > 0)$res[$kk][$k] = (1 - Special::errorFunction($length / (2 * sqrt($time * DIFFUSION_CONSTANT))));
             }
         }
 
         // form martix
+        $res[0][0] = 1;
         $res = MatrixFactory::create($res);
 
         // return
