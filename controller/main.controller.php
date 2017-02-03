@@ -14,9 +14,7 @@ class MainController extends Common{
 
         //loop for various values
         $dt = [0.1, 0.2, 0.5, 1.0, 5.0, 10, 20];
-        $dx = [0.001, 0.002, 0.005, 0.01, 0.02];
-        // $dt = [1, 0.2];
-        // $dx = [0.01, 0.02];
+        $dx = [0.001, 0.002, 0.005, 0.01, 0.02]; 
 
         echo '#,' . implode(',', $dt) . '<br>';
         foreach ($dx as $k2 => $xval) {
